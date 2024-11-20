@@ -1,37 +1,51 @@
-import os
-import subprocess
-from flask import Flask, request
-
+from flask import Flask, request, jsonify
 from google.cloud import storage
+import os
 
 app = Flask(__name__)
-BUCKET_NAME = 'YOUR_BUCKET_NAME'
 
-# Add a route for the root URL
+# Set up Google Cloud credentials (make sure your JSON file is set up properly in Render)
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/etc/secrets/keyfile.json"
+
+# Initialize the Google Cloud Storage client
+storage_client = storage.Client()
+
+# Replace this with your Google Cloud Storage bucket name
+BUCKET_NAME = 'your_bucket_name_here'
+
 @app.route('/')
-def index():
-    return "YouTube Video Uploader is Running", 200
+def home():
+    return "YouTube Video Uploader is Running"
 
 @app.route('/download', methods=['POST'])
-def download_video():
-    video_url = request.json.get('video_url')
-    if not video_url:
-        return "No video URL provided", 400
+def download():
+    try:
+        # Get the incoming JSON request data
+        data = request.json
+        if not data or 'video_url' not in data:
+            return jsonify({"error": "Invalid request, 'video_url' is required"}), 400
+        
+        video_url = data['video_url']
 
-    # Download video with yt-dlp
-    file_name = 'video.mp4'
-    subprocess.run(['yt-dlp', '-o', file_name, video_url])
+        # Use youtube-dl or yt-dlp to download the video
+        video_filename = "downloaded_video.mp4"
+        
+        os.system(f"yt-dlp -o {video_filename} {video_url}")
 
-    # Upload to Google Cloud Storage
-    client = storage.Client()
-    bucket = client.bucket(BUCKET_NAME)
-    blob = bucket.blob(file_name)
-    blob.upload_from_filename(file_name)
+        # Upload to Google Cloud Storage
+        bucket = storage_client.bucket(BUCKET_NAME)
+        blob = bucket.blob(video_filename)
+        blob.upload_from_filename(video_filename)
 
-    # Clean up local file
-    os.remove(file_name)
+        # Delete the local file after upload
+        os.remove(video_filename)
 
-    return f"Uploaded {file_name} to {BUCKET_NAME}", 200
+        return jsonify({"message": "Video uploaded successfully"}), 200
 
-if __name__ == "__main__":
+    except Exception as e:
+        # Print error to console for debugging and return an error response
+        print(f"Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
