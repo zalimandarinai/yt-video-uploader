@@ -1,10 +1,16 @@
 import os
 import subprocess
 from flask import Flask, request
+
 from google.cloud import storage
 
 app = Flask(__name__)
 BUCKET_NAME = 'YOUR_BUCKET_NAME'
+
+# Add a route for the root URL
+@app.route('/')
+def index():
+    return "YouTube Video Uploader is Running", 200
 
 @app.route('/download', methods=['POST'])
 def download_video():
