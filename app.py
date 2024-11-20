@@ -1,36 +1,29 @@
-from flask import Flask, request, jsonify
-import subprocess
-import os
+from flask import Flask, request, send_file
+import yt_dlp
 
 app = Flask(__name__)
 
 @app.route('/download', methods=['POST'])
 def download_video():
+    data = request.get_json()
+    video_url = data.get('video_url')
+    
     try:
-        # Get the YouTube URL from the request
-        data = request.get_json()
-        youtube_url = data.get("video_url")
-        
-        if not youtube_url:
-            return jsonify({"error": "No video URL provided"}), 400
-        
-        # Download video using yt-dlp
-        result = subprocess.run([
-            'yt-dlp',
-            youtube_url,
-            '--cookies', 'youtube_cookies.txt',
-            '-o', 'downloaded_video.mp4'
-        ], text=True, capture_output=True)
+        # yt-dlp options
+        ydl_opts = {
+            'outtmpl': 'downloaded_video.mp4',
+            'format': 'bestvideo+bestaudio/best',
+        }
 
-        if result.returncode != 0:
-            # Log and return the error from yt-dlp
-            return jsonify({"error": result.stderr}), 500
+        # Download the video
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])
 
-        return jsonify({"message": "Video downloaded successfully"}), 200
+        # Send the file back to the client
+        return send_file('downloaded_video.mp4', as_attachment=True)
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return {"message": f"Error: {str(e)}"}, 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=8080)
